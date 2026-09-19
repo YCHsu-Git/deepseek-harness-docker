@@ -11,9 +11,10 @@ DSH_HOME="${DSH_HOME:-/root/.dsh}"
 # The browser-trust fence 403s any request whose Host header isn't loopback
 # or in --trusted-host, so a non-loopback host:port needs to be declared here.
 # --trusted-host takes a variadic list; repeating the flag would just replace
-# the previous occurrence, so pass every host in one invocation. dsh rejects
-# an unbracketed IPv6 literal outright (crashing startup), so drop those here
-# too, defense-in-depth against whatever produced TRUSTED_HOSTS.
+# the previous occurrence, so pass every host in one invocation. dsh rejects an
+# unbracketed IPv6 literal outright (crashing startup) and has no syntax for a
+# zone id, so bracket bare IPv6 and drop link-local/zone-id addresses here too
+# -- defense-in-depth against whatever produced TRUSTED_HOSTS.
 extra_args=()
 if [ -n "${TRUSTED_HOSTS:-}" ]; then
   IFS=',' read -ra trusted_hosts <<< "$TRUSTED_HOSTS"
@@ -21,7 +22,9 @@ if [ -n "${TRUSTED_HOSTS:-}" ]; then
   for host in "${trusted_hosts[@]}"; do
     case "$host" in
       \[*) filtered_hosts+=("$host") ;;
-      *:*:*) echo "entrypoint: skipping unbracketed IPv6 trusted host: $host" >&2 ;;
+      *%*) echo "entrypoint: skipping link-local trusted host: $host" >&2 ;;
+      fe80:*) echo "entrypoint: skipping link-local trusted host: $host" >&2 ;;
+      *:*:*) filtered_hosts+=("[$host]") ;;
       *) filtered_hosts+=("$host") ;;
     esac
   done
