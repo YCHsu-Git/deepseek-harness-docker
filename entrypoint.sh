@@ -67,15 +67,16 @@ if [ -n "${OLLAMA_BASE_URL:-}" ]; then
   export OLLAMA_API_KEY="${OLLAMA_API_KEY:-ollama}"
   first_model=""
   models_json=""
+  # pi-ai only defaults a request's max_tokens from a *model's own* maxTokens
+  # (route-level defaultMaxTokens only sizes catalog capability and is kept
+  # out of request defaults by design), so the cap has to be set per model
+  # here for "Output token limit reached" to actually go away.
   for model in $(echo "${OLLAMA_MODELS:-llama3.1}" | tr ',' ' '); do
     [ -z "$first_model" ] && first_model="$model"
     [ -n "$models_json" ] && models_json+=", "
-    models_json+="{id: ${model}}"
+    models_json+="{id: ${model}, maxTokens: ${OLLAMA_MAX_TOKENS:-128000}}"
   done
-  # pi-ai's own default output cap (32,768) is what "Output token limit
-  # reached" mid-answer usually means; raise it here instead of hand-editing
-  # settings.yaml after every rebuild.
-  ollama_line="llm-pi-ai: {providers: {ollama: {apiKeyEnv: OLLAMA_API_KEY, api: openai-completions, baseURL: \"${OLLAMA_BASE_URL}\", compat: {supportsDeveloperRole: false, maxTokensField: max_tokens}, defaultMaxTokens: ${OLLAMA_MAX_TOKENS:-128000}, models: [${models_json}]}}}"
+  ollama_line="llm-pi-ai: {providers: {ollama: {apiKeyEnv: OLLAMA_API_KEY, api: openai-completions, baseURL: \"${OLLAMA_BASE_URL}\", compat: {supportsDeveloperRole: false, maxTokensField: max_tokens}, models: [${models_json}]}}}"
   default_model_line="agent-default-model: {provider: ollama, model: ${first_model}}"
 
   seed_yaml_key '^llm-pi-ai:' "$ollama_line" "the ollama provider (baseURL=$OLLAMA_BASE_URL)"
