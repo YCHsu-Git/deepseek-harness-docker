@@ -10,6 +10,9 @@ IMAGE_NAME="${IMAGE_NAME:-deepseek-harness:latest}"
 CONTAINER_NAME="${CONTAINER_NAME:-deepseek-harness}"
 DSH_HOME_DIR="${DSH_HOME_DIR:-$HOME/.dsh}"
 HOST_PORT="${HOST_PORT:-3080}"
+# Set this to the hostname or IP that the browser will actually use. Do not
+# include a scheme or port: PUBLIC_HOST=192.0.2.10 ./build_and_run.sh
+PUBLIC_HOST="${PUBLIC_HOST:-}"
 # set PUSH_IMAGE=true to publish the built image to Docker Hub
 PUSH_IMAGE="${PUSH_IMAGE:-false}"
 REGISTRY_IMAGE="${REGISTRY_IMAGE:-superyc1121/deepseek-harness:latest}"
@@ -31,10 +34,11 @@ else
   git clone --depth 1 "$REPO_URL" "$CLONE_DIR"
 fi
 
-# 2. Drop in the Dockerfile/.dockerignore/entrypoint next to the checked-out sources.
+# 2. Drop in the container support files next to the checked-out sources.
 cp "$SCRIPT_DIR/Dockerfile" "$CLONE_DIR/Dockerfile"
 cp "$SCRIPT_DIR/.dockerignore" "$CLONE_DIR/.dockerignore"
 cp "$SCRIPT_DIR/entrypoint.sh" "$CLONE_DIR/entrypoint.sh"
+cp "$SCRIPT_DIR/nginx.conf" "$CLONE_DIR/nginx.conf"
 
 # 3. Build the image.
 log "Building image $IMAGE_NAME"
@@ -56,25 +60,45 @@ fi
 mkdir -p "$DSH_HOME_DIR"
 
 # dsh only auto-trusts LAN IPs when bound to 0.0.0.0, which it refuses to do
-# (see entrypoint.sh), so trusting your host's own IPs is otherwise entirely
-# manual. Auto-detect them here (this script runs on the real host, so it can
-# see what the container cannot) unless TRUSTED_HOSTS was already set.
+# (see entrypoint.sh), so trusting your host's own address is otherwise
+# manual. The trust value must match the browser authority, including port.
+# PUBLIC_HOST is therefore the reliable option for a remote host, DNS name,
+# VPN address, or reverse proxy. Auto-detection is only a local fallback.
 # IPv6 needs brackets and a link-local address needs a zone id dsh can't take,
 # so bracket routable IPv6 and drop link-local/zone-id addresses entirely
 # (entrypoint.sh repeats this filter as a defense-in-depth backstop).
 if [ -z "${TRUSTED_HOSTS:-}" ]; then
-  auto_hosts="$(hostname -I 2>/dev/null | tr ' ' '\n' | awk '
+  if [ -n "$PUBLIC_HOST" ]; then
+    case "$PUBLIC_HOST" in
+      \[*\]) public_authority="${PUBLIC_HOST}:${HOST_PORT}" ;;
+      *:*) public_authority="[${PUBLIC_HOST}]:${HOST_PORT}" ;;
+      *) public_authority="${PUBLIC_HOST}:${HOST_PORT}" ;;
+    esac
+    TRUSTED_HOSTS="$public_authority"
+    log "Trusting PUBLIC_HOST: $TRUSTED_HOSTS"
+  else
+    auto_hosts="$(hostname -I 2>/dev/null | tr ' ' '\n' | awk -v port="$HOST_PORT" '
     /^$/ { next }
     /%/ { next }
     /^127\./ { next }
     /^::1$/ { next }
     /^fe80:/ { next }
-    /:/ { print "[" $0 "]"; next }
-    { print }
+    /:/ { print "[" $0 "]:" port; next }
+    { print $0 ":" port }
   ' | paste -sd, -)"
-  if [ -n "$auto_hosts" ]; then
-    TRUSTED_HOSTS="$auto_hosts"
-    log "TRUSTED_HOSTS not set; auto-detected host addresses: $TRUSTED_HOSTS"
+    if [ -n "$auto_hosts" ]; then
+      TRUSTED_HOSTS="$auto_hosts"
+      log "TRUSTED_HOSTS not set; auto-detected browser authorities: $TRUSTED_HOSTS"
+    fi
+  fi
+fi
+
+if [ -z "$PUBLIC_HOST" ]; then
+  PUBLIC_HOST="$(hostname 2>/dev/null || true)"
+  if [ -n "$PUBLIC_HOST" ]; then
+    hostname_authority="${PUBLIC_HOST}:${HOST_PORT}"
+    TRUSTED_HOSTS="${TRUSTED_HOSTS:+${TRUSTED_HOSTS},}${hostname_authority}"
+    log "Also trusting the printed hostname: $hostname_authority"
   fi
 fi
 
@@ -131,7 +155,7 @@ for _ in $(seq 1 30); do
 done
 
 if [ -n "$token" ]; then
-  log "Done. Web UI: http://0.0.0.0:$HOST_PORT/?token=$token  (logs: docker logs -f $CONTAINER_NAME)"
+  log "Done. Web UI: http://$PUBLIC_HOST:$HOST_PORT/?token=$token  (logs: docker logs -f $CONTAINER_NAME)"
 else
-  log "Done, but no auth token seen yet. Web UI: http://0.0.0.0:$HOST_PORT  (check: docker logs -f $CONTAINER_NAME)"
+  log "Done, but no auth token seen yet. Web UI: http://$PUBLIC_HOST:$HOST_PORT  (check: docker logs -f $CONTAINER_NAME)"
 fi
