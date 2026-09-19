@@ -1,9 +1,10 @@
 FROM node:22-bookworm
 
-# native/ build artifacts and some pnpm deps need a C toolchain + python3
+# native/ build artifacts and some pnpm deps need a C toolchain + python3;
+# socat relays the app's 127.0.0.1-only listener to 0.0.0.0
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       git python3 make g++ ca-certificates \
+       git python3 make g++ ca-certificates socat \
     && rm -rf /var/lib/apt/lists/*
 
 # package.json pins its pnpm version; corepack fetches it on first use
@@ -15,9 +16,11 @@ COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm run build
 
-# dsh only supports binding to 127.0.0.1; run the container with --network host
-ENV DSH_HOME=/root/.dsh
-EXPOSE 3080
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
-ENTRYPOINT ["pnpm", "dsh"]
+ENV DSH_HOME=/root/.dsh
+EXPOSE 8080
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["web", "--no-open"]
