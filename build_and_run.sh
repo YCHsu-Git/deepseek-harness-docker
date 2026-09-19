@@ -55,6 +55,18 @@ fi
 
 mkdir -p "$DSH_HOME_DIR"
 
+# dsh only auto-trusts LAN IPs when bound to 0.0.0.0, which it refuses to do
+# (see entrypoint.sh), so trusting your host's own IPs is otherwise entirely
+# manual. Auto-detect them here (this script runs on the real host, so it can
+# see what the container cannot) unless TRUSTED_HOSTS was already set.
+if [ -z "${TRUSTED_HOSTS:-}" ]; then
+  auto_hosts="$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$\|^127\.' | paste -sd, -)"
+  if [ -n "$auto_hosts" ]; then
+    TRUSTED_HOSTS="$auto_hosts"
+    log "TRUSTED_HOSTS not set; auto-detected host IPs: $TRUSTED_HOSTS"
+  fi
+fi
+
 # 6. Run the container. The image relays dsh's 127.0.0.1:3080-only listener
 #    to 0.0.0.0:8080 internally (see entrypoint.sh), so a normal port mapping
 #    exposes it on the host's 0.0.0.0:$HOST_PORT.
