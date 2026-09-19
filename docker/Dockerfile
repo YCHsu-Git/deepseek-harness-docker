@@ -1,4 +1,4 @@
-FROM node:20-bookworm
+FROM node:22-bookworm
 
 # native/ build artifacts and some pnpm deps need a C toolchain + python3
 RUN apt-get update \
