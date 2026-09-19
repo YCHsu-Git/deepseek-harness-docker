@@ -59,8 +59,10 @@ mkdir -p "$DSH_HOME_DIR"
 # (see entrypoint.sh), so trusting your host's own IPs is otherwise entirely
 # manual. Auto-detect them here (this script runs on the real host, so it can
 # see what the container cannot) unless TRUSTED_HOSTS was already set.
+# IPv4 only: dsh requires bracketed IPv6 literals and rejects anything else,
+# so an unbracketed IPv6/link-local address from `hostname -I` would crash it.
 if [ -z "${TRUSTED_HOSTS:-}" ]; then
-  auto_hosts="$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$\|^127\.' | paste -sd, -)"
+  auto_hosts="$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$' | grep -v '^127\.' | paste -sd, -)"
   if [ -n "$auto_hosts" ]; then
     TRUSTED_HOSTS="$auto_hosts"
     log "TRUSTED_HOSTS not set; auto-detected host IPs: $TRUSTED_HOSTS"

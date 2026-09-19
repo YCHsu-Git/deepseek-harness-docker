@@ -50,7 +50,12 @@ cleanup() {
 }
 trap cleanup TERM INT EXIT
 
+# Bail out instead of retrying forever if dsh exited (bad config, etc.).
 until (echo > /dev/tcp/127.0.0.1/3080) 2>/dev/null; do
+  if ! kill -0 "$dsh_pid" 2>/dev/null; then
+    echo "entrypoint: dsh exited before it started listening; see the log above" >&2
+    exit 1
+  fi
   sleep 0.5
 done
 
