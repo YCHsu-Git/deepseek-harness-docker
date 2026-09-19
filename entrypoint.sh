@@ -34,26 +34,29 @@ if [ -n "${TRUSTED_HOSTS:-}" ]; then
   fi
 fi
 
-# Pre-seed a custom Ollama provider on first run only, so an existing
-# settings.yaml (or a later edit through the Models page) is never overwritten.
-if [ -n "${OLLAMA_BASE_URL:-}" ] && [ ! -f "$DSH_HOME/settings.yaml" ]; then
+# Pre-seed a custom Ollama provider when requested. A real YAML merge needs a
+# parser we don't have, so this only ever adds the whole top-level
+# `llm-pi-ai:` key (as one flow-style line, safe to append to any existing
+# mapping) and refuses to touch a settings.yaml that already has that key.
+if [ -n "${OLLAMA_BASE_URL:-}" ]; then
   mkdir -p "$DSH_HOME"
   export OLLAMA_API_KEY="${OLLAMA_API_KEY:-ollama}"
-  {
-    echo "llm-pi-ai:"
-    echo "  providers:"
-    echo "    ollama:"
-    echo "      apiKeyEnv: OLLAMA_API_KEY"
-    echo "      api: openai-completions"
-    echo "      baseURL: ${OLLAMA_BASE_URL}"
-    echo "      compat:"
-    echo "        supportsDeveloperRole: false"
-    echo "        maxTokensField: max_tokens"
-    echo "      models:"
-    for model in $(echo "${OLLAMA_MODELS:-llama3.1}" | tr ',' ' '); do
-      echo "        - id: ${model}"
-    done
-  } > "$DSH_HOME/settings.yaml"
+  models_json=""
+  for model in $(echo "${OLLAMA_MODELS:-llama3.1}" | tr ',' ' '); do
+    [ -n "$models_json" ] && models_json+=", "
+    models_json+="{id: ${model}}"
+  done
+  ollama_line="llm-pi-ai: {providers: {ollama: {apiKeyEnv: OLLAMA_API_KEY, api: openai-completions, baseURL: \"${OLLAMA_BASE_URL}\", compat: {supportsDeveloperRole: false, maxTokensField: max_tokens}, models: [${models_json}]}}}"
+
+  if [ ! -f "$DSH_HOME/settings.yaml" ]; then
+    echo "$ollama_line" > "$DSH_HOME/settings.yaml"
+    echo "entrypoint: seeded Ollama provider (baseURL=$OLLAMA_BASE_URL) in a new settings.yaml"
+  elif grep -q '^llm-pi-ai:' "$DSH_HOME/settings.yaml"; then
+    echo "entrypoint: settings.yaml already has an llm-pi-ai section; leaving it alone (add the ollama provider by hand or via the Models page)" >&2
+  else
+    printf '\n%s\n' "$ollama_line" >> "$DSH_HOME/settings.yaml"
+    echo "entrypoint: appended Ollama provider (baseURL=$OLLAMA_BASE_URL) to existing settings.yaml"
+  fi
 fi
 
 pnpm dsh "$@" "${extra_args[@]}" &
