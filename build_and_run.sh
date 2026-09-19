@@ -66,6 +66,15 @@ run_args=(
   -v "$DSH_HOME_DIR:/root/.dsh"
 )
 [ -n "${DEEPSEEK_API_KEY:-}" ] && run_args+=(-e "DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY")
+# non-loopback host:port your browser uses, e.g. TRUSTED_HOSTS=203.0.113.10:3080
+[ -n "${TRUSTED_HOSTS:-}" ] && run_args+=(-e "TRUSTED_HOSTS=$TRUSTED_HOSTS")
+# point at an Ollama container's OpenAI-compatible endpoint, e.g.
+# OLLAMA_BASE_URL=http://ollama:11434/v1 (needs --network to share DNS with it)
+[ -n "${OLLAMA_BASE_URL:-}" ] && run_args+=(-e "OLLAMA_BASE_URL=$OLLAMA_BASE_URL")
+[ -n "${OLLAMA_MODELS:-}" ] && run_args+=(-e "OLLAMA_MODELS=$OLLAMA_MODELS")
+[ -n "${OLLAMA_API_KEY:-}" ] && run_args+=(-e "OLLAMA_API_KEY=$OLLAMA_API_KEY")
+# join an existing user-defined network (e.g. the one an Ollama container is on)
+[ -n "${DOCKER_NETWORK:-}" ] && run_args+=(--network "$DOCKER_NETWORK")
 
 log "Starting container $CONTAINER_NAME"
 docker run "${run_args[@]}" "$IMAGE_NAME"

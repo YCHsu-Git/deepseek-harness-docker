@@ -6,8 +6,41 @@
 set -euo pipefail
 
 LISTEN_PORT="${LISTEN_PORT:-8080}"
+DSH_HOME="${DSH_HOME:-/root/.dsh}"
 
-pnpm dsh "$@" &
+# The browser-trust fence 403s any request whose Host header isn't loopback
+# or in --trusted-host, so a non-loopback host:port needs to be declared here.
+extra_args=()
+if [ -n "${TRUSTED_HOSTS:-}" ]; then
+  IFS=',' read -ra trusted_hosts <<< "$TRUSTED_HOSTS"
+  for host in "${trusted_hosts[@]}"; do
+    extra_args+=(--trusted-host "$host")
+  done
+fi
+
+# Pre-seed a custom Ollama provider on first run only, so an existing
+# settings.yaml (or a later edit through the Models page) is never overwritten.
+if [ -n "${OLLAMA_BASE_URL:-}" ] && [ ! -f "$DSH_HOME/settings.yaml" ]; then
+  mkdir -p "$DSH_HOME"
+  export OLLAMA_API_KEY="${OLLAMA_API_KEY:-ollama}"
+  {
+    echo "llm-pi-ai:"
+    echo "  providers:"
+    echo "    ollama:"
+    echo "      apiKeyEnv: OLLAMA_API_KEY"
+    echo "      api: openai-completions"
+    echo "      baseURL: ${OLLAMA_BASE_URL}"
+    echo "      compat:"
+    echo "        supportsDeveloperRole: false"
+    echo "        maxTokensField: max_tokens"
+    echo "      models:"
+    for model in $(echo "${OLLAMA_MODELS:-llama3.1}" | tr ',' ' '); do
+      echo "        - id: ${model}"
+    done
+  } > "$DSH_HOME/settings.yaml"
+fi
+
+pnpm dsh "$@" "${extra_args[@]}" &
 dsh_pid=$!
 
 cleanup() {
