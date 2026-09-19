@@ -96,7 +96,14 @@ if [ "${DEBUG:-}" = "1" ] || [ "${DEBUG:-}" = "true" ]; then
 fi
 
 nginx_pid=""
-pnpm dsh "$@" "${extra_args[@]}" &
+# dsh's http.Server starts accepting TCP connections well before its Cordis
+# plugin tree (including the /api/remote.mux WebSocket route) finishes
+# mounting, so a bare TCP-connect readiness check leaves a window where nginx
+# forwards traffic into a socket dsh resets mid-handshake. `dsh web:` is only
+# printed once the full Loader tree settles, so tee stdout to a file and wait
+# for that line instead; process substitution keeps $! as dsh's own pid.
+dsh_log="$(mktemp)"
+pnpm dsh "$@" "${extra_args[@]}" > >(tee "$dsh_log") 2>&1 &
 dsh_pid=$!
 
 cleanup() {
@@ -104,16 +111,29 @@ cleanup() {
   kill -TERM "$dsh_pid" 2>/dev/null || true
   [ -z "$nginx_pid" ] || wait "$nginx_pid" 2>/dev/null || true
   wait "$dsh_pid" 2>/dev/null || true
+  rm -f "$dsh_log"
 }
 trap cleanup TERM INT EXIT
 
-# Bail out instead of retrying forever if dsh exited (bad config, etc.).
-until (echo > /dev/tcp/127.0.0.1/3080) 2>/dev/null; do
+# Bail out instead of retrying forever if dsh exited (bad config, etc.). Cap
+# the wait in case a future dsh version changes this exact wording, falling
+# back to the old (racy but bounded) TCP check rather than hanging forever.
+boot_wait=0
+until grep -q '^dsh web:' "$dsh_log" 2>/dev/null; do
   if ! kill -0 "$dsh_pid" 2>/dev/null; then
     echo "entrypoint: dsh exited before it started listening; see the log above" >&2
     exit 1
   fi
+  if [ "$boot_wait" -ge 120 ]; then
+    echo "entrypoint: dsh did not print its startup line within 60s; falling back to a plain TCP check" >&2
+    until (echo > /dev/tcp/127.0.0.1/3080) 2>/dev/null; do
+      kill -0 "$dsh_pid" 2>/dev/null || { echo "entrypoint: dsh exited before it started listening; see the log above" >&2; exit 1; }
+      sleep 0.5
+    done
+    break
+  fi
   sleep 0.5
+  boot_wait=$((boot_wait + 1))
 done
 
 nginx -g 'daemon off;' &
