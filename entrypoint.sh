@@ -11,12 +11,24 @@ DSH_HOME="${DSH_HOME:-/root/.dsh}"
 # The browser-trust fence 403s any request whose Host header isn't loopback
 # or in --trusted-host, so a non-loopback host:port needs to be declared here.
 # --trusted-host takes a variadic list; repeating the flag would just replace
-# the previous occurrence, so pass every host in one invocation.
+# the previous occurrence, so pass every host in one invocation. dsh rejects
+# an unbracketed IPv6 literal outright (crashing startup), so drop those here
+# too, defense-in-depth against whatever produced TRUSTED_HOSTS.
 extra_args=()
 if [ -n "${TRUSTED_HOSTS:-}" ]; then
   IFS=',' read -ra trusted_hosts <<< "$TRUSTED_HOSTS"
-  extra_args+=(--trusted-host "${trusted_hosts[@]}")
-  echo "entrypoint: trusted hosts: ${trusted_hosts[*]}"
+  filtered_hosts=()
+  for host in "${trusted_hosts[@]}"; do
+    case "$host" in
+      \[*) filtered_hosts+=("$host") ;;
+      *:*:*) echo "entrypoint: skipping unbracketed IPv6 trusted host: $host" >&2 ;;
+      *) filtered_hosts+=("$host") ;;
+    esac
+  done
+  if [ "${#filtered_hosts[@]}" -gt 0 ]; then
+    extra_args+=(--trusted-host "${filtered_hosts[@]}")
+    echo "entrypoint: trusted hosts: ${filtered_hosts[*]}"
+  fi
 fi
 
 # Pre-seed a custom Ollama provider on first run only, so an existing
