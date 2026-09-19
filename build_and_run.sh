@@ -70,4 +70,18 @@ run_args=(
 log "Starting container $CONTAINER_NAME"
 docker run "${run_args[@]}" "$IMAGE_NAME"
 
-log "Done. Web UI: http://0.0.0.0:$HOST_PORT  (logs: docker logs -f $CONTAINER_NAME)"
+# 7. dsh prints a one-time per-process auth token; grab it and rewrite the URL
+#    with the externally reachable $HOST_PORT (the token itself stays valid).
+log "Waiting for the dsh web auth token"
+token=""
+for _ in $(seq 1 30); do
+  token="$(docker logs "$CONTAINER_NAME" 2>&1 | sed -n 's/.*[?&]token=\([^ &]*\).*/\1/p' | tail -n1)"
+  [ -n "$token" ] && break
+  sleep 1
+done
+
+if [ -n "$token" ]; then
+  log "Done. Web UI: http://0.0.0.0:$HOST_PORT/?token=$token  (logs: docker logs -f $CONTAINER_NAME)"
+else
+  log "Done, but no auth token seen yet. Web UI: http://0.0.0.0:$HOST_PORT  (check: docker logs -f $CONTAINER_NAME)"
+fi
