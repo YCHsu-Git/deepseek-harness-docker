@@ -96,6 +96,9 @@ if [ "${DEBUG:-}" = "1" ] || [ "${DEBUG:-}" = "true" ]; then
 fi
 
 nginx_pid=""
+# The compiled CLI keeps the launcher and profile plugins in the same lib/
+# module plane. `pnpm dsh` starts the TypeScript source entry and can split
+# module-scoped symbols from plugins resolved through lib/.
 # dsh's http.Server starts accepting TCP connections well before its Cordis
 # plugin tree (including the /api/remote.mux WebSocket route) finishes
 # mounting, so a bare TCP-connect readiness check leaves a window where nginx
@@ -103,7 +106,7 @@ nginx_pid=""
 # printed once the full Loader tree settles, so tee stdout to a file and wait
 # for that line instead; process substitution keeps $! as dsh's own pid.
 dsh_log="$(mktemp)"
-pnpm dsh "$@" "${extra_args[@]}" > >(tee "$dsh_log") 2>&1 &
+node apps/cli/lib/bin.js "$@" "${extra_args[@]}" > >(tee "$dsh_log") 2>&1 &
 dsh_pid=$!
 
 cleanup() {

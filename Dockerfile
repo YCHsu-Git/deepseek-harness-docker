@@ -23,7 +23,7 @@ RUN grep -Fq "const persistence = ctx.remote.\$host.isLoopback ? 'host' : 'memor
             packages/client/ui-settings/src/client/index.ts
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm run build
+RUN pnpm run build && test -s apps/cli/lib/bin.js
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY nginx.conf /etc/nginx/nginx.conf
