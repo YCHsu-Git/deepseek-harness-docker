@@ -72,7 +72,10 @@ if [ -n "${OLLAMA_BASE_URL:-}" ]; then
     [ -n "$models_json" ] && models_json+=", "
     models_json+="{id: ${model}}"
   done
-  ollama_line="llm-pi-ai: {providers: {ollama: {apiKeyEnv: OLLAMA_API_KEY, api: openai-completions, baseURL: \"${OLLAMA_BASE_URL}\", compat: {supportsDeveloperRole: false, maxTokensField: max_tokens}, models: [${models_json}]}}}"
+  # pi-ai's own default output cap (32,768) is what "Output token limit
+  # reached" mid-answer usually means; raise it here instead of hand-editing
+  # settings.yaml after every rebuild.
+  ollama_line="llm-pi-ai: {providers: {ollama: {apiKeyEnv: OLLAMA_API_KEY, api: openai-completions, baseURL: \"${OLLAMA_BASE_URL}\", compat: {supportsDeveloperRole: false, maxTokensField: max_tokens}, defaultMaxTokens: ${OLLAMA_MAX_TOKENS:-128000}, models: [${models_json}]}}}"
   default_model_line="agent-default-model: {provider: ollama, model: ${first_model}}"
 
   seed_yaml_key '^llm-pi-ai:' "$ollama_line" "the ollama provider (baseURL=$OLLAMA_BASE_URL)"
