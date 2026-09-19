@@ -4,6 +4,12 @@
 # authority accepted by dsh's API trust check.
 set -euo pipefail
 
+# Let `docker run <image> bash` (or sh) drop straight into a shell instead of
+# being passed as an argument to the dsh CLI below.
+case "${1:-}" in
+  bash|sh) exec "$@" ;;
+esac
+
 # set DEBUG=1 to trace every command this script runs
 if [ "${DEBUG:-}" = "1" ] || [ "${DEBUG:-}" = "true" ]; then
   set -x
