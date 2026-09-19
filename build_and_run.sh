@@ -103,6 +103,10 @@ run_args=(
 [ -n "${DEEPSEEK_API_KEY:-}" ] && run_args+=(-e "DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY")
 # non-loopback host:port your browser uses, e.g. TRUSTED_HOSTS=203.0.113.10:3080
 [ -n "${TRUSTED_HOSTS:-}" ] && run_args+=(-e "TRUSTED_HOSTS=$TRUSTED_HOSTS")
+# set these if reaching api.deepseek.com from this host needs a proxy
+[ -n "${HTTP_PROXY:-}" ] && run_args+=(-e "HTTP_PROXY=$HTTP_PROXY")
+[ -n "${HTTPS_PROXY:-}" ] && run_args+=(-e "HTTPS_PROXY=$HTTPS_PROXY")
+[ -n "${NO_PROXY:-}" ] && run_args+=(-e "NO_PROXY=$NO_PROXY")
 # point at an Ollama container by IP, e.g. OLLAMA_BASE_URL=http://172.17.0.3:11434/v1,
 # or set OLLAMA_CONTAINER=<name> above to resolve its IP automatically
 [ -n "${OLLAMA_BASE_URL:-}" ] && run_args+=(-e "OLLAMA_BASE_URL=$OLLAMA_BASE_URL")

@@ -13,6 +13,15 @@ fi
 LISTEN_PORT="${LISTEN_PORT:-8080}"
 DSH_HOME="${DSH_HOME:-/root/.dsh}"
 
+# DeepSeek's own API is what --host 0.0.0.0 obviously can't affect: a failure
+# to reach it here is a network problem (firewall/GFW/proxy), not a dsh bug.
+# Set HTTP_PROXY/HTTPS_PROXY if outbound HTTPS needs a proxy to leave the host.
+if code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 https://api.deepseek.com/v1/models 2>&1); then
+  echo "entrypoint: probed https://api.deepseek.com -> HTTP $code"
+else
+  echo "entrypoint: could not reach https://api.deepseek.com ($code) -- outbound network/DNS/firewall problem, not a dsh config problem; set HTTP_PROXY/HTTPS_PROXY if this host needs a proxy for outbound HTTPS" >&2
+fi
+
 # The browser-trust fence 403s any request whose Host header isn't loopback
 # or in --trusted-host, so a non-loopback host:port needs to be declared here.
 # --trusted-host takes a variadic list; repeating the flag would just replace
