@@ -5,6 +5,11 @@
 # (LISTEN_PORT, default 8080) to 127.0.0.1:3080 with socat.
 set -euo pipefail
 
+# set DEBUG=1 to trace every command this script runs
+if [ "${DEBUG:-}" = "1" ] || [ "${DEBUG:-}" = "true" ]; then
+  set -x
+fi
+
 LISTEN_PORT="${LISTEN_PORT:-8080}"
 DSH_HOME="${DSH_HOME:-/root/.dsh}"
 
@@ -57,6 +62,22 @@ if [ -n "${OLLAMA_BASE_URL:-}" ]; then
     printf '\n%s\n' "$ollama_line" >> "$DSH_HOME/settings.yaml"
     echo "entrypoint: appended Ollama provider (baseURL=$OLLAMA_BASE_URL) to existing settings.yaml"
   fi
+
+  # Tell config problems apart from network problems: probe the endpoint
+  # itself, independent of whatever settings.yaml ended up with above.
+  models_url="${OLLAMA_BASE_URL%/}/models"
+  if code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$models_url" 2>&1); then
+    echo "entrypoint: probed $models_url -> HTTP $code"
+  else
+    echo "entrypoint: could not reach $models_url ($code) -- check the container is on the same docker network as Ollama, or that OLLAMA_BASE_URL/OLLAMA_CONTAINER is correct" >&2
+  fi
+fi
+
+if [ "${DEBUG:-}" = "1" ] || [ "${DEBUG:-}" = "true" ]; then
+  echo "entrypoint: --- debug: network ---"
+  ip -4 addr show 2>&1 | sed 's/^/entrypoint: /'
+  echo "entrypoint: --- debug: settings.yaml ---"
+  cat "$DSH_HOME/settings.yaml" 2>&1 | sed 's/^/entrypoint: /'
 fi
 
 pnpm dsh "$@" "${extra_args[@]}" &

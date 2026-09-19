@@ -110,6 +110,8 @@ run_args=(
 [ -n "${OLLAMA_API_KEY:-}" ] && run_args+=(-e "OLLAMA_API_KEY=$OLLAMA_API_KEY")
 # join an existing user-defined network (only needed for name-based DNS, not IP)
 [ -n "${DOCKER_NETWORK:-}" ] && run_args+=(--network "$DOCKER_NETWORK")
+# set DEBUG=1 for bash tracing plus network/settings.yaml dumps in the log
+[ -n "${DEBUG:-}" ] && run_args+=(-e "DEBUG=$DEBUG")
 
 log "Starting container $CONTAINER_NAME"
 docker run "${run_args[@]}" "$IMAGE_NAME"
