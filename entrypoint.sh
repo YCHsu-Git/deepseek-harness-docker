@@ -10,12 +10,13 @@ DSH_HOME="${DSH_HOME:-/root/.dsh}"
 
 # The browser-trust fence 403s any request whose Host header isn't loopback
 # or in --trusted-host, so a non-loopback host:port needs to be declared here.
+# --trusted-host takes a variadic list; repeating the flag would just replace
+# the previous occurrence, so pass every host in one invocation.
 extra_args=()
 if [ -n "${TRUSTED_HOSTS:-}" ]; then
   IFS=',' read -ra trusted_hosts <<< "$TRUSTED_HOSTS"
-  for host in "${trusted_hosts[@]}"; do
-    extra_args+=(--trusted-host "$host")
-  done
+  extra_args+=(--trusted-host "${trusted_hosts[@]}")
+  echo "entrypoint: trusted hosts: ${trusted_hosts[*]}"
 fi
 
 # Pre-seed a custom Ollama provider on first run only, so an existing
