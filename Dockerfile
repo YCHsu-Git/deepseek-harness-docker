@@ -14,6 +14,14 @@ RUN corepack enable
 WORKDIR /app
 COPY . .
 
+# dsh deliberately disables the settings RPC for non-loopback browser pages.
+# This image terminates browser traffic through its authenticated Nginx proxy,
+# so retain the existing host-backed settings document for remote users.
+RUN grep -Fq "const persistence = ctx.remote.\$host.isLoopback ? 'host' : 'memory'" \
+            packages/client/ui-settings/src/client/index.ts \
+        && sed -i "s/const persistence = ctx.remote.\$host.isLoopback ? 'host' : 'memory'/const persistence = 'host'/" \
+            packages/client/ui-settings/src/client/index.ts
+
 RUN pnpm install --frozen-lockfile
 RUN pnpm run build
 
