@@ -4,7 +4,8 @@
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/deepseek-ai/deepseek-harness.git}"
-CLONE_DIR="${CLONE_DIR:-$HOME/deepseek-harness}"
+# clone under the directory the script is invoked from (pwd), not $HOME
+CLONE_DIR="${CLONE_DIR:-$(pwd)/deepseek-harness}"
 IMAGE_NAME="${IMAGE_NAME:-deepseek-harness:latest}"
 CONTAINER_NAME="${CONTAINER_NAME:-deepseek-harness}"
 DSH_HOME_DIR="${DSH_HOME_DIR:-$HOME/.dsh}"
