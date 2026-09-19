@@ -48,29 +48,37 @@ if [ -n "${TRUSTED_HOSTS:-}" ]; then
   fi
 fi
 
-# Pre-seed a custom Ollama provider when requested. A real YAML merge needs a
-# parser we don't have, so this only ever adds the whole top-level
-# `llm-pi-ai:` key (as one flow-style line, safe to append to any existing
-# mapping) and refuses to touch a settings.yaml that already has that key.
+# Pre-seed a custom Ollama provider when requested, and make it the default
+# model for new sessions so a fresh deployment never reaches for DeepSeek. A
+# real YAML merge needs a parser we don't have, so each key below is only ever
+# added whole, as one flow-style line safe to append to any existing mapping;
+# a settings.yaml that already has that top-level key is left untouched.
+seed_yaml_key() {
+  local key="$1" line="$2" desc="$3"
+  if [ ! -f "$DSH_HOME/settings.yaml" ] || ! grep -q "$key" "$DSH_HOME/settings.yaml"; then
+    printf '%s\n' "$line" >> "$DSH_HOME/settings.yaml"
+    echo "entrypoint: seeded $desc"
+  else
+    echo "entrypoint: settings.yaml already has $key; leaving it alone (edit it by hand or via the Models page)" >&2
+  fi
+}
+
 if [ -n "${OLLAMA_BASE_URL:-}" ]; then
   mkdir -p "$DSH_HOME"
+  touch "$DSH_HOME/settings.yaml"
   export OLLAMA_API_KEY="${OLLAMA_API_KEY:-ollama}"
+  first_model=""
   models_json=""
   for model in $(echo "${OLLAMA_MODELS:-llama3.1}" | tr ',' ' '); do
+    [ -z "$first_model" ] && first_model="$model"
     [ -n "$models_json" ] && models_json+=", "
     models_json+="{id: ${model}}"
   done
   ollama_line="llm-pi-ai: {providers: {ollama: {apiKeyEnv: OLLAMA_API_KEY, api: openai-completions, baseURL: \"${OLLAMA_BASE_URL}\", compat: {supportsDeveloperRole: false, maxTokensField: max_tokens}, models: [${models_json}]}}}"
+  default_model_line="agent-default-model: {provider: ollama, model: ${first_model}}"
 
-  if [ ! -f "$DSH_HOME/settings.yaml" ]; then
-    echo "$ollama_line" > "$DSH_HOME/settings.yaml"
-    echo "entrypoint: seeded Ollama provider (baseURL=$OLLAMA_BASE_URL) in a new settings.yaml"
-  elif grep -q '^llm-pi-ai:' "$DSH_HOME/settings.yaml"; then
-    echo "entrypoint: settings.yaml already has an llm-pi-ai section; leaving it alone (add the ollama provider by hand or via the Models page)" >&2
-  else
-    printf '\n%s\n' "$ollama_line" >> "$DSH_HOME/settings.yaml"
-    echo "entrypoint: appended Ollama provider (baseURL=$OLLAMA_BASE_URL) to existing settings.yaml"
-  fi
+  seed_yaml_key '^llm-pi-ai:' "$ollama_line" "the ollama provider (baseURL=$OLLAMA_BASE_URL)"
+  seed_yaml_key '^agent-default-model:' "$default_model_line" "ollama/$first_model as the default model"
 
   # Tell config problems apart from network problems: probe the endpoint
   # itself, independent of whatever settings.yaml ended up with above.
