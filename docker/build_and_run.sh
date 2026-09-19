@@ -8,6 +8,9 @@ CLONE_DIR="${CLONE_DIR:-$HOME/deepseek-harness}"
 IMAGE_NAME="${IMAGE_NAME:-deepseek-harness:latest}"
 CONTAINER_NAME="${CONTAINER_NAME:-deepseek-harness}"
 DSH_HOME_DIR="${DSH_HOME_DIR:-$HOME/.dsh}"
+# set PUSH_IMAGE=true to publish the built image to Docker Hub
+PUSH_IMAGE="${PUSH_IMAGE:-false}"
+REGISTRY_IMAGE="${REGISTRY_IMAGE:-superyc1121/deepseek-harness:latest}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 log() { printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*"; }
@@ -34,7 +37,14 @@ cp "$SCRIPT_DIR/.dockerignore" "$CLONE_DIR/.dockerignore"
 log "Building image $IMAGE_NAME"
 docker build -t "$IMAGE_NAME" "$CLONE_DIR"
 
-# 4. Replace any previous container instance.
+# 4. Optionally push to Docker Hub (requires a prior `docker login`).
+if [ "$PUSH_IMAGE" = "true" ] || [ "$PUSH_IMAGE" = "1" ]; then
+  log "Tagging $IMAGE_NAME as $REGISTRY_IMAGE and pushing"
+  docker tag "$IMAGE_NAME" "$REGISTRY_IMAGE"
+  docker push "$REGISTRY_IMAGE"
+fi
+
+# 5. Replace any previous container instance.
 if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
   log "Removing existing container $CONTAINER_NAME"
   docker rm -f "$CONTAINER_NAME" >/dev/null
@@ -42,7 +52,7 @@ fi
 
 mkdir -p "$DSH_HOME_DIR"
 
-# 5. Run the container. dsh's web app refuses --host 0.0.0.0, so the container
+# 6. Run the container. dsh's web app refuses --host 0.0.0.0, so the container
 #    shares the host's network namespace and is reachable via the host's own
 #    127.0.0.1:3080 (Linux only; --network host has no effect on Docker Desktop
 #    for macOS/Windows).
