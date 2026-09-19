@@ -67,6 +67,18 @@ if [ -z "${TRUSTED_HOSTS:-}" ]; then
   fi
 fi
 
+# Resolve an Ollama container's IP by name so it works over plain container
+# IPs (the default bridge routes those without any --network/DNS setup).
+if [ -z "${OLLAMA_BASE_URL:-}" ] && [ -n "${OLLAMA_CONTAINER:-}" ]; then
+  ollama_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$OLLAMA_CONTAINER" 2>/dev/null | head -n1)"
+  if [ -n "$ollama_ip" ]; then
+    OLLAMA_BASE_URL="http://$ollama_ip:${OLLAMA_PORT:-11434}/v1"
+    log "OLLAMA_BASE_URL not set; resolved container $OLLAMA_CONTAINER to $OLLAMA_BASE_URL"
+  else
+    log "warning: could not resolve an IP for OLLAMA_CONTAINER=$OLLAMA_CONTAINER"
+  fi
+fi
+
 # 6. Run the container. The image relays dsh's 127.0.0.1:3080-only listener
 #    to 0.0.0.0:8080 internally (see entrypoint.sh), so a normal port mapping
 #    exposes it on the host's 0.0.0.0:$HOST_PORT.
@@ -80,12 +92,12 @@ run_args=(
 [ -n "${DEEPSEEK_API_KEY:-}" ] && run_args+=(-e "DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY")
 # non-loopback host:port your browser uses, e.g. TRUSTED_HOSTS=203.0.113.10:3080
 [ -n "${TRUSTED_HOSTS:-}" ] && run_args+=(-e "TRUSTED_HOSTS=$TRUSTED_HOSTS")
-# point at an Ollama container's OpenAI-compatible endpoint, e.g.
-# OLLAMA_BASE_URL=http://ollama:11434/v1 (needs --network to share DNS with it)
+# point at an Ollama container by IP, e.g. OLLAMA_BASE_URL=http://172.17.0.3:11434/v1,
+# or set OLLAMA_CONTAINER=<name> above to resolve its IP automatically
 [ -n "${OLLAMA_BASE_URL:-}" ] && run_args+=(-e "OLLAMA_BASE_URL=$OLLAMA_BASE_URL")
 [ -n "${OLLAMA_MODELS:-}" ] && run_args+=(-e "OLLAMA_MODELS=$OLLAMA_MODELS")
 [ -n "${OLLAMA_API_KEY:-}" ] && run_args+=(-e "OLLAMA_API_KEY=$OLLAMA_API_KEY")
-# join an existing user-defined network (e.g. the one an Ollama container is on)
+# join an existing user-defined network (only needed for name-based DNS, not IP)
 [ -n "${DOCKER_NETWORK:-}" ] && run_args+=(--network "$DOCKER_NETWORK")
 
 log "Starting container $CONTAINER_NAME"
