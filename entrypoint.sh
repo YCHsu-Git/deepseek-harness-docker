@@ -17,6 +17,12 @@ fi
 
 DSH_HOME="${DSH_HOME:-/root/.dsh}"
 
+# New sessions default their workspace root to this process's cwd (see
+# packages/bundle/base/cordis.patch.yml), so point it at the mounted
+# workspace volume instead of the dsh source tree under /app.
+mkdir -p /mnt/dsh
+cd /mnt/dsh
+
 # DeepSeek's own API is what --host 0.0.0.0 obviously can't affect: a failure
 # to reach it here is a network problem (firewall/GFW/proxy), not a dsh bug.
 # Set HTTP_PROXY/HTTPS_PROXY if outbound HTTPS needs a proxy to leave the host.
@@ -111,8 +117,8 @@ if [ "${1:-}" = "web" ] && [ "${SKIP_DSH_MARKET:-}" != "1" ]; then
   market_pkg_json="$DSH_HOME/profiles/web/package.json"
   if [ ! -f "$market_pkg_json" ] || ! grep -q '"dshmarket"' "$market_pkg_json"; then
     echo "entrypoint: installing dsh-market plugin into the web profile"
-    node apps/cli/lib/bin.js --profile web --dump-default-config >/dev/null 2>&1 || true
-    if node apps/cli/lib/bin.js plugin --profile web add dshmarket; then
+    node /app/apps/cli/lib/bin.js --profile web --dump-default-config >/dev/null 2>&1 || true
+    if node /app/apps/cli/lib/bin.js plugin --profile web add dshmarket; then
       echo "entrypoint: dsh-market installed"
     else
       echo "entrypoint: failed to install dsh-market plugin; continuing without it" >&2
@@ -131,7 +137,7 @@ nginx_pid=""
 # printed once the full Loader tree settles, so tee stdout to a file and wait
 # for that line instead; process substitution keeps $! as dsh's own pid.
 dsh_log="$(mktemp)"
-node apps/cli/lib/bin.js "$@" "${extra_args[@]}" > >(tee "$dsh_log") 2>&1 &
+node /app/apps/cli/lib/bin.js "$@" "${extra_args[@]}" > >(tee "$dsh_log") 2>&1 &
 dsh_pid=$!
 
 cleanup() {

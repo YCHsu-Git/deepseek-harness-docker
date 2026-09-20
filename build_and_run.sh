@@ -9,6 +9,8 @@ CLONE_DIR="${CLONE_DIR:-$(pwd)/deepseek-harness}"
 IMAGE_NAME="${IMAGE_NAME:-deepseek-harness:latest}"
 CONTAINER_NAME="${CONTAINER_NAME:-deepseek-harness}"
 DSH_HOME_DIR="${DSH_HOME_DIR:-$HOME/.dsh}"
+# mounted at /mnt/dsh, the default session workspace root (see entrypoint.sh)
+WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/dsh-workspace}"
 HOST_PORT="${HOST_PORT:-3080}"
 # Set this to the hostname or IP that the browser will actually use. Do not
 # include a scheme or port: PUBLIC_HOST=192.0.2.10 ./build_and_run.sh
@@ -57,7 +59,7 @@ if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
   docker rm -f "$CONTAINER_NAME" >/dev/null
 fi
 
-mkdir -p "$DSH_HOME_DIR"
+mkdir -p "$DSH_HOME_DIR" "$WORKSPACE_DIR"
 
 # dsh only auto-trusts LAN IPs when bound to 0.0.0.0, which it refuses to do
 # (see entrypoint.sh), so trusting your host's own address is otherwise
@@ -123,6 +125,7 @@ run_args=(
   -p "0.0.0.0:$HOST_PORT:8080"
   --restart unless-stopped
   -v "$DSH_HOME_DIR:/root/.dsh"
+  -v "$WORKSPACE_DIR:/mnt/dsh"
 )
 [ -n "${DEEPSEEK_API_KEY:-}" ] && run_args+=(-e "DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY")
 # non-loopback host:port your browser uses, e.g. TRUSTED_HOSTS=203.0.113.10:3080
