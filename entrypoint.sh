@@ -105,6 +105,21 @@ if [ "${DEBUG:-}" = "1" ] || [ "${DEBUG:-}" = "true" ]; then
   cat "$DSH_HOME/settings.yaml" 2>&1 | sed 's/^/entrypoint: /'
 fi
 
+# Auto-install the dsh-market plugin marketplace (https://github.com/dsh-market/dsh-market)
+# into the web profile. Skipped once it's already recorded there, or via SKIP_DSH_MARKET=1.
+if [ "${1:-}" = "web" ] && [ "${SKIP_DSH_MARKET:-}" != "1" ]; then
+  market_pkg_json="$DSH_HOME/profiles/web/package.json"
+  if [ ! -f "$market_pkg_json" ] || ! grep -q '"dshmarket"' "$market_pkg_json"; then
+    echo "entrypoint: installing dsh-market plugin into the web profile"
+    node apps/cli/lib/bin.js --profile web --dump-default-config >/dev/null 2>&1 || true
+    if node apps/cli/lib/bin.js plugin --profile web add dshmarket; then
+      echo "entrypoint: dsh-market installed"
+    else
+      echo "entrypoint: failed to install dsh-market plugin; continuing without it" >&2
+    fi
+  fi
+fi
+
 nginx_pid=""
 # The compiled CLI keeps the launcher and profile plugins in the same lib/
 # module plane. `pnpm dsh` starts the TypeScript source entry and can split
