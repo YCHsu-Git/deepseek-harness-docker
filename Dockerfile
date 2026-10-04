@@ -35,6 +35,12 @@ RUN grep -Fq "const persistence = ctx.remote.\$host.isLoopback ? 'host' : 'memor
 RUN pnpm install --frozen-lockfile
 RUN pnpm run build && test -s apps/cli/lib/bin.js
 
+# apps/cli declares a "dsh" bin, but nothing installs it onto PATH; link it
+# so `dsh` works from an interactive shell, matching entrypoint.sh's direct
+# `node /app/apps/cli/lib/bin.js` invocation
+RUN chmod +x apps/cli/lib/bin.js \
+    && ln -s /app/apps/cli/lib/bin.js /usr/local/bin/dsh
+
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY nginx.conf /etc/nginx/nginx.conf
 RUN chmod +x /usr/local/bin/entrypoint.sh
