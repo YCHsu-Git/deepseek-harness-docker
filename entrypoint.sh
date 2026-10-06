@@ -126,6 +126,23 @@ if [ "${1:-}" = "web" ] && [ "${SKIP_DSH_MARKET:-}" != "1" ]; then
   fi
 fi
 
+# Auto-install dsh-fetch-timeouts (https://github.com/d3vmeh/dsh-fetch-timeouts)
+# into the web profile, so local model backends (Ollama, LM Studio) aren't cut
+# off by Node's 5-minute fetch timeout. Skipped once already recorded there,
+# or via SKIP_DSH_FETCH_TIMEOUTS=1.
+if [ "${1:-}" = "web" ] && [ "${SKIP_DSH_FETCH_TIMEOUTS:-}" != "1" ]; then
+  fetch_timeouts_pkg_json="$DSH_HOME/profiles/web/package.json"
+  if [ ! -f "$fetch_timeouts_pkg_json" ] || ! grep -q '"dsh-fetch-timeouts"' "$fetch_timeouts_pkg_json"; then
+    echo "entrypoint: installing dsh-fetch-timeouts plugin into the web profile"
+    node /app/apps/cli/lib/bin.js --profile web --dump-default-config >/dev/null 2>&1 || true
+    if node /app/apps/cli/lib/bin.js plugin --profile web add dsh-fetch-timeouts; then
+      echo "entrypoint: dsh-fetch-timeouts installed"
+    else
+      echo "entrypoint: failed to install dsh-fetch-timeouts plugin; continuing without it" >&2
+    fi
+  fi
+fi
+
 nginx_pid=""
 # The compiled CLI keeps the launcher and profile plugins in the same lib/
 # module plane. `pnpm dsh` starts the TypeScript source entry and can split
